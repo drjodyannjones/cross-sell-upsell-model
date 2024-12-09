@@ -1,0 +1,104 @@
+version: "3.9"
+services:
+  # Airflow Webserver
+  airflow-webserver:
+    image: astronomerinc/ap-airflow:2.5.1
+    container_name: airflow-webserver
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=your_fernet_key
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+    ports:
+      - "8080:8080"
+    depends_on:
+      - airflow-postgres
+      - airflow-redis
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    image: astronomerinc/ap-airflow:2.5.1
+    container_name: airflow-scheduler
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=your_fernet_key
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    depends_on:
+      - airflow-postgres
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+
+  # Airflow Postgres
+  airflow-postgres:
+    image: postgres:13
+    container_name: airflow-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - airflow-postgres-data:/var/lib/postgresql/data
+
+  # Redis for Airflow
+  airflow-redis:
+    image: redis:6
+    container_name: airflow-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # Flask API
+  flask-api:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: flask-api
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - airflow-webserver
+
+  # Metabase
+  metabase:
+    image: metabase/metabase
+    container_name: metabase
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: admin
+      MB_DB_PASS: admin
+      MB_DB_HOST: metabase-postgres
+    depends_on:
+      - metabase-postgres
+
+  # Metabase Postgres
+  metabase-postgres:
+    image: postgres:13
+    container_name: metabase-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: metabase
+    ports:
+      - "5433:5432"
+    volumes:
+      - metabase-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  airflow-postgres-data:
+  metabase-postgres-data:
